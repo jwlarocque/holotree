@@ -21,7 +21,6 @@ def read_root():
 def post_set(string_num:int, light_num:int, val:str="ff0000"):
     try:
         data = ([0] * light_num + [int(val, 16)] + [0] * (LEDS_PER_CHANNEL - 1 - light_num)) * 16
-        # data = ([0] * (LEDS_PER_CHANNEL - 1 - light_num) + [int(val, 16)] + [0] * light_num + [0]) * 16
         led_dma(np.array(data, dtype=np.int32), LEDS_PER_CHANNEL, 10)
         return {"status": 1}
     except:
