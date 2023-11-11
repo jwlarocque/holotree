@@ -100,6 +100,7 @@ volatile SMI_DCD_REG *smi_dcd;
 
 uint16_t *txdata;                               // Pointer to uncached Tx data buffer
 uint16_t tx_buffer[TX_BUFF_LEN(CHAN_MAXLEDS)];  // Tx buffer for assembling data
+int rgb_data[CHAN_MAXLEDS][LED_NCHANS]; // RGB data
 
 void rgb_txdata(int *rgbs, TXDATA_T *txd);
 int str_rgb(char *s, int rgbs[][LED_NCHANS], int chan);
@@ -127,8 +128,16 @@ int LED_DMA(int* array, int n_LEDs, int wait_msec)
     map_uncached_mem(&vc_mem, VC_MEM_SIZE);
     setup_smi_dma(&vc_mem, TX_BUFF_LEN(n_LEDs));
 
+    // un-flatten data array (just numpy things)
+    int index = 0;
+    for (int i = 0; i < LED_NCHANS; i++) {
+        for (int j = 0; j < CHAN_MAXLEDS; j++) {
+            rgb_data[j][i] = array[index++];
+        }
+    }
+
     for (int n=0; n<n_LEDs; n++) {
-        rgb_txdata(&array[n], &tx_buffer[LED_TX_OSET(n)]);
+        rgb_txdata(rgb_data[n], &tx_buffer[LED_TX_OSET(n)]);
     }
 	// memcpy(&tx_buffer[LED_PREBITS],array,LED_DLEN*n_LEDs*sizeof(uint16_t));//<-- wrong ?
     memcpy(txdata, tx_buffer, TX_BUFF_SIZE(n_LEDs));   // from intermediate buffer into uncached DMA memory
@@ -136,7 +145,7 @@ int LED_DMA(int* array, int n_LEDs, int wait_msec)
     start_smi(&vc_mem);
     int m =0; 
     while (dma_active(DMA_CHAN)) { m+=1;usleep(100);}   // 10 mus
-    usleep(wait_msec * 100);
+    usleep(wait_msec * 1000);
     terminate(0);
     return(0);
 }   // end main
