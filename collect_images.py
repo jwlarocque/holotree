@@ -5,20 +5,22 @@ import requests
 import cv2
 
 
-N_STRINGS = 16
-LIGHTS_PER_STRING = 220
+N_STRINGS = 10
+LIGHTS_PER_STRING = 100
+DATA_DIR = "data"
 
 
-if not os.path.exists("data"):
-    os.makedirs("data")
+if not os.path.exists(DATA_DIR):
+    os.makedirs(DATA_DIR)
 
 perspective_num = 0
-while os.path.exists(f'data/{perspective_num}'):
+while os.path.exists(f'{DATA_DIR}/{perspective_num}'):
     perspective_num += 1
-os.makedirs(f'data/{perspective_num}')
+os.makedirs(f'{DATA_DIR}/{perspective_num}')
 
 print(f"Capturing perspective {perspective_num}")
 input("Press ENTER to continue...")
+time.sleep(10)
 
 cap = cv2.VideoCapture(0)
 cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1920)
@@ -30,7 +32,7 @@ ret, clean_plate = cap.read()
 cap.release()
 if not ret:
     print("???")
-cv2.imwrite(f'data/{perspective_num}/clean_plate.jpg', clean_plate)
+cv2.imwrite(f'{DATA_DIR}/{perspective_num}/clean_plate.jpg', clean_plate)
 
 
 for string_num in range(N_STRINGS):
@@ -45,7 +47,7 @@ for string_num in range(N_STRINGS):
         cap = cv2.VideoCapture(0)
         cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1920)
         cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 1080)
-        img_path = f'data/{perspective_num}/{string_num}_{light_num}.jpg'
+        img_path = f'{DATA_DIR}/{perspective_num}/{string_num}_{light_num}.jpg'
         ret, img = cap.read()
         cap.release()
         cv2.imwrite(img_path, img)
