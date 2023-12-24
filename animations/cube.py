@@ -1,7 +1,7 @@
 import time
 
-import vedo
 import numpy as np
+from scipy.spatial.transform import Rotation
 
 
 # For use with the actual tree, do not alter the name of `FrameGenerator` or the
@@ -17,20 +17,22 @@ import numpy as np
 #        place as in the simulator - centered at the base of the branches, and
 #        the radius at the widest point will be 1.)
 
-CUBE_HEIGHT = 0.8
+ENABLED = False
+CUBE_HEIGHT = 1.2
 
 class FrameGenerator():
     vertices = np.array([
         [-1, -1, -1], [1, -1, -1], [1, 1, -1], [-1, 1, -1],
-        [-1, -1, 1], [1, -1, 1], [1, 1, 1], [-1, 1, 1]])
+        [-1, -1, 1], [1, -1, 1], [1, 1, 1], [-1, 1, 1]]) * 1.3
     vertices = vertices / 2.5 + [0, 0, CUBE_HEIGHT] # fit inside tree
     cube_edges = np.array([
         [0, 1], [1, 2], [2, 3], [3, 0], [4, 5], [5, 6],
         [6, 7], [7, 4], [0, 4], [1, 5], [2, 6], [3, 7]])
-    cube = vedo.Mesh([vertices, cube_edges], c='g4', alpha=1.0).wireframe()
-    origin = vedo.Point(pos=(0, 0, 0)) # for debug purposes
     last_frame_time = time.time()
-    debug = True
+    # debug = True
+    rot = Rotation.from_euler("xyz", [45, 45, 0], degrees=True)
+    for  i in range(len(vertices)):
+        vertices[i] = rot.apply(vertices[i] - [0, 0, CUBE_HEIGHT]) + [0, 0, CUBE_HEIGHT]
 
     def __init__(self, lights: np.ndarray):
         """
@@ -44,15 +46,15 @@ class FrameGenerator():
         """
         Toggle debug mode (simulator only). Do whatever you want with this.
         """
-        self.debug = not self.debug
-        if self.debug:
-            self.cube.wireframe(True)
-            self.cube.alpha = 1.0
-            self.origin.alpha(1.0)
-        else:
-            self.cube.wireframe(False)
-            self.cube.alpha = 0.0
-            self.origin.alpha(0.0)
+        # self.debug = not self.debug
+        # if self.debug:
+        #     self.cube.wireframe(True)
+        #     self.cube.alpha = 1.0
+        #     self.origin.alpha(1.0)
+        # else:
+        #     self.cube.wireframe(False)
+        #     self.cube.alpha = 0.0
+        #     self.origin.alpha(0.0)
 
     def get_frame(self):
         """
@@ -68,16 +70,18 @@ class FrameGenerator():
             actual tree.
         """
         this_frame_time = time.time()
-        delta = this_frame_time - self.last_frame_time
+        delta = (this_frame_time - self.last_frame_time) * 20
         self.last_frame_time = this_frame_time
 
-        self.cube.rotate_x(delta * 5, around=[0, 0, CUBE_HEIGHT])
-        self.cube.rotate_y(delta * 5, around=[0, 0, CUBE_HEIGHT])
-        self.cube.rotate_z(delta * 5, around=[0, 0, CUBE_HEIGHT])
+        rot = Rotation.from_euler("xyz", [0, 0, delta], degrees=True)
+        for  i in range(len(self.vertices)):
+            self.vertices[i] = rot.apply(self.vertices[i] - [0, 0, CUBE_HEIGHT]) + [0, 0, CUBE_HEIGHT]
+        # self.cube.rotate_x(delta * 5, around=[0, 0, CUBE_HEIGHT])
+        # self.cube.rotate_y(delta * 5, around=[0, 0, CUBE_HEIGHT])
+        # self.cube.rotate_z(delta * 5, around=[0, 0, CUBE_HEIGHT])
 
-        cube_edges = self.cube.points()[self.cube.edges()]
         min_dists = None
-        for edge in cube_edges:
+        for edge in self.vertices[self.cube_edges]:
             dists = lineseg_dists(self.lights, edge[0], edge[1])
             if min_dists is None:
                 min_dists = dists
@@ -86,8 +90,7 @@ class FrameGenerator():
 
         colors = []
         for i in range(len(min_dists)):
-            brightness = max(0, .001 - max(0, 2 * min_dists[i] - 0.005) ** 2)
-            brightness = 1000000000 * brightness ** 3
+            brightness = radiance_decay_func(min_dists[i])
             colors.append((brightness, brightness, brightness))
 
         return colors
@@ -97,7 +100,13 @@ class FrameGenerator():
         Returns:
             A list of vedo objects to be rendered in the simulator.
         """
-        return [self.cube, self.origin]
+        return []
+
+def rotateMatrix(a):
+    return np.array([[np.cos(a), -np.sin(a)], [np.sin(a), np.cos(a)]]) + []
+
+def radiance_decay_func(x):
+    return 1 / (1 + (x / .02) ** 3)
 
 def lineseg_dists(p, a, b):
     # adapted from https://stackoverflow.com/questions/54442057/calculate-the-euclidian-distance-between-an-array-of-points-to-a-line-segment-in/54442561#54442561
@@ -110,47 +119,3 @@ def lineseg_dists(p, a, b):
     h = np.maximum.reduce([s, t, np.zeros(len(p))])
     c = np.cross(p - a, d)
     return np.hypot(h, (c * c).sum(axis=1))
-
-
-# == SIMULATOR ============================================
-
-if __name__ == "__main__":
-    last_time = time.time()
-
-    tree = vedo.Cone(pos=(0, 0, 1.5)).wireframe()
-    lights = vedo.Points(
-        np.random.rand(int(4000 * 3.8197), 3) * [2, 2, 3] - [1, 1, 0],
-        r=5,
-        c='yellow')
-    lights = tree.inside_points(lights)
-    lights.point_size = 5
-    lights.color('black')
-
-    def timestep(event, plt, frame_generator):
-        lights.pointcolors = np.array(frame_generator.get_frame()) * 255
-        plt.render()
-
-    generator = FrameGenerator(lights.points())
-
-    plt = vedo.Plotter(bg="gray")
-    def handle_timer(event):
-        timestep(event, plt, generator)
-    plt.add_callback("timer", handle_timer)
-    plt.add_button(
-            generator.toggle_debug,
-            pos=(0.8, 0.05),
-            states=["toggle debug"],
-            c=["w"],
-            bc=["dg"],
-            font="courier",
-            size=30,
-            bold=False,
-            italic=False,
-            alpha=0.6,
-            angle=0.0)
-    plt.show([lights] + generator.get_debug_objects(), interactive=False)
-    # plt.show([lights, tree, cube], interactive=False)
-    plt.timer_callback("create", dt=10)
-    plt.interactive().close()
-
-    exit()
